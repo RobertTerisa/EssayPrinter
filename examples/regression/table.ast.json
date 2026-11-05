@@ -1,0 +1,103 @@
+{
+  "schema": "essayprinter/ast@1",
+  "meta": {
+    "title": "回归用例",
+    "author": "EssayPrinter",
+    "lang": "zh"
+  },
+  "blocks": [
+    {
+      "type": "h",
+      "level": 1,
+      "id": "sec-table",
+      "text": "表格回归"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "下表为单行表头、多行数据："
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "id": "tbl-reg",
+      "caption_runs": [
+        {
+          "t": "回归数据"
+        }
+      ],
+      "header": [
+        [
+          {
+            "t": "方法"
+          }
+        ],
+        [
+          {
+            "t": "耗时"
+          }
+        ],
+        [
+          {
+            "t": "备注"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "t": "Baseline"
+            }
+          ],
+          [
+            {
+              "t": "12 ms"
+            }
+          ],
+          [
+            {
+              "t": "单线程"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "t": "Router/Worker"
+            }
+          ],
+          [
+            {
+              "t": "7 ms"
+            }
+          ],
+          [
+            {
+              "t": "4 并发"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "t": "Optimized"
+            }
+          ],
+          [
+            {
+              "t": "5 ms"
+            }
+          ],
+          [
+            {
+              "t": "缓存命中"
+            }
+          ]
+        ]
+      ]
+    }
+  ]
+}

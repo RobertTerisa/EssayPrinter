@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "essayprinter/ast@1",
+  "type": "object",
+  "required": ["schema", "blocks"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "essayprinter/ast@1" },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"}, "subtitle": {"type": "string"},
+        "subtitle_latin": {"type": "string"}, "author": {"type": "string"},
+        "date": {"type": "string"}, "source": {"type": "string"},
+        "url": {"type": "string"}, "lang": {"type": "string", "default": "zh"}
+      }
+    },
+    "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } }
+  },
+  "$defs": {
+    "inline": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "t": {"type": "string"}, "code": {"type": "boolean"},
+        "strong": {"type": "boolean"}, "em": {"type": "boolean"},
+        "link": {"type": "string"}, "ref": {"type": "string"},
+        "fn": {"type": "string"}, "math": {"type": "string"}
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "enum": ["h","p","list","quote","callout","figure","table","code","math","note","toc","pagebreak","hr"] } },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "h" } } },
+          "then": { "required": ["level","text","id"] } },
+        { "if": { "properties": { "type": { "const": "toc" } } },
+          "then": { "required": ["title","depth","detected","entries"],
+                    "properties": {
+                      "detected": { "enum": ["original","extracted"] },
+                      "entries": { "type": "array", "items": {
+                        "type": "object",
+                        "required": ["text","level","anchor"],
+                        "properties": {
+                          "text": {"type": "string"},
+                          "level": {"type": "integer", "minimum": 1, "maximum": 6},
+                          "anchor": {"type": "string"}
+                        },
+                        "additionalProperties": false } } } } },
+        { "if": { "properties": { "type": { "const": "figure" } } },
+          "then": { "required": ["src","id"] } },
+        { "if": { "properties": { "type": { "const": "math" } } },
+          "then": { "required": ["content"] } },
+        { "if": { "properties": { "type": { "const": "table" } } },
+          "then": { "required": ["header","rows"] } }
+      ]
+    }
+  }
+}

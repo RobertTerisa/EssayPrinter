@@ -1,0 +1,231 @@
+{
+  "schema": "essayprinter/ast@1",
+  "meta": {
+    "title": "Super-agent 设计探索",
+    "subtitle": "迈向更自主的 Agent 系统",
+    "author": "DeepSeekHarness",
+    "lang": "zh"
+  },
+  "blocks": [
+    {
+      "type": "h",
+      "level": 1,
+      "id": "sec-2-layer",
+      "text": "双层架构"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "本文是一篇面向工程实践的架构思路探讨，并非对 DeepSeek Harness 现有产品功能的介绍。"
+        }
+      ],
+      "fontSize": 20
+    },
+    {
+      "type": "callout",
+      "tone": "note",
+      "blocks": [
+        {
+          "type": "p",
+          "runs": [
+            {
+              "t": "设计的核心矛盾：既要保持全局对话的连续性，又要让高并发执行互不干扰。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "h",
+      "level": 2,
+      "id": "sec-2-1-router",
+      "text": "Router 层"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "为了兼顾连续性与吞吐量，我们可以将「维护全局连续性」与「高并发执行」拆分到两个不同的层级中：由常驻的 "
+        },
+        {
+          "t": "Router 层",
+          "strong": true
+        },
+        {
+          "t": " 统一承接人类交互与全局协调，由上下文隔离的 Worker 层并发执行具体任务（见 "
+        },
+        {
+          "ref": "fig-4"
+        },
+        {
+          "t": "）。"
+        }
+      ]
+    },
+    {
+      "type": "figure",
+      "id": "fig-4",
+      "src": "media/image4.png",
+      "width_pct": 98,
+      "caption_runs": [
+        {
+          "t": "双层架构：Router 层统一负责路由与对外交互，多个 Worker Session 隔离并发执行任务"
+        }
+      ]
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "相关内容可参阅 "
+        },
+        {
+          "ref": "sec-2-layer"
+        },
+        {
+          "t": " 与 "
+        },
+        {
+          "ref": "sec-2-1-router"
+        },
+        {
+          "t": "。"
+        }
+      ]
+    },
+    {
+      "type": "note",
+      "side": "outer",
+      "runs": [
+        {
+          "t": "这里的双语标题与批注栏竖线，是从样例 docx 的版式反解出来的。"
+        }
+      ]
+    },
+    {
+      "type": "h",
+      "level": 1,
+      "id": "sec-3-exp",
+      "text": "实验结果"
+    },
+    {
+      "type": "h",
+      "level": 2,
+      "id": "sec-3-1-method",
+      "text": "方法"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "我们对基线实现与 Router/Worker 拆分实现做了一次简单基准测试，结果见 "
+        },
+        {
+          "ref": "tbl-1"
+        },
+        {
+          "t": "，时间复杂度的理论值如 "
+        },
+        {
+          "ref": "eq-1"
+        },
+        {
+          "t": "。"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "id": "tbl-1",
+      "caption_runs": [
+        {
+          "t": "基准测试结果"
+        }
+      ],
+      "header": [
+        [
+          {
+            "t": "方法"
+          }
+        ],
+        [
+          {
+            "t": "耗时"
+          }
+        ],
+        [
+          {
+            "t": "备注"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "t": "Baseline"
+            }
+          ],
+          [
+            {
+              "t": "12 ms"
+            }
+          ],
+          [
+            {
+              "t": "单线程"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "t": "Router/Worker"
+            }
+          ],
+          [
+            {
+              "t": "7 ms"
+            }
+          ],
+          [
+            {
+              "t": "4 并发"
+            }
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "math",
+      "id": "eq-1",
+      "content": "T(n) = O(n log n)"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "当任务数 "
+        },
+        {
+          "math": "n"
+        },
+        {
+          "t": " 增大时，耗时按 "
+        },
+        {
+          "math": "O(n log n)"
+        },
+        {
+          "t": " 增长。"
+        }
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "content": "def route(task):\n    return worker_pool.submit(task)\n"
+    }
+  ]
+}

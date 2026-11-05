@@ -1,0 +1,49 @@
+{
+  "schema": "essayprinter/ast@1",
+  "meta": {
+    "title": "回归用例",
+    "author": "EssayPrinter",
+    "lang": "zh"
+  },
+  "blocks": [
+    {
+      "type": "h",
+      "level": 1,
+      "id": "sec-math",
+      "text": "公式回归"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "块公式如下："
+        }
+      ]
+    },
+    {
+      "type": "math",
+      "id": "eq-reg",
+      "content": "T(n) = O(n log n)"
+    },
+    {
+      "type": "p",
+      "runs": [
+        {
+          "t": "行内公式 "
+        },
+        {
+          "math": "O(n log n)"
+        },
+        {
+          "t": "，并可引用 "
+        },
+        {
+          "ref": "eq-reg"
+        },
+        {
+          "t": "。"
+        }
+      ]
+    }
+  ]
+}
