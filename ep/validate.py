@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,131 @@ def _run(cmd: list, cwd=None) -> subprocess.CompletedProcess:
 
 def load_tokens(theme: str, themes_dir: Path) -> dict:
     return json.loads((themes_dir / f"{theme}.tokens.json").read_text(encoding="utf-8"))
+
+
+_TOKEN_TOP_LEVEL_KEYS = frozenset({
+    "name", "version", "mode", "numbers", "derivedFrom",
+    "page", "font", "ink", "type", "para", "list", "grid",
+})
+_NUMBER_TYPES = frozenset({"lining", "old-style", "auto"})
+_NUMBER_WIDTHS = frozenset({"proportional", "tabular", "auto"})
+_TEXT_STYLES = frozenset({
+    "body", "note", "caption", "header", "footer", "tocTitle", "toc1", "toc2",
+    "coverKicker", "coverTitle", "coverSub", "coverLatin", "coverMeta",
+})
+_HEADING_STYLES = frozenset({f"h{i}" for i in range(1, 7)})
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _tokens_error(message: str, hint: str = "") -> Issue:
+    return Issue("THEME_TOKENS_INVALID", "error", message,
+                 hint=hint or "修正 themes/*.tokens.json；这是主题资产错误，不要改 AST",
+                 where="themes/*.tokens.json", category="env")
+
+
+def validate_tokens(tokens: dict) -> list[Issue]:
+    """编译前校验 tokens 结构与必需键，避免拼错键值被误判成 AST 内容错误。"""
+    issues: list[Issue] = []
+    if not isinstance(tokens, dict):
+        return [_tokens_error("tokens 顶层必须是 JSON 对象")]
+
+    for key in sorted(set(tokens) - _TOKEN_TOP_LEVEL_KEYS):
+        issues.append(Issue(
+            "THEME_TOKENS_UNKNOWN_KEY", "warn",
+            f"未知 tokens 顶层键：{key}",
+            hint="未读取键不会生效；确认是否为拼写错误",
+            where="themes/*.tokens.json", category="env"))
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            issues.append(_tokens_error(message))
+
+    version = tokens.get("version")
+    require(isinstance(version, str) and bool(version.strip()),
+            "version 必须是非空字符串")
+
+    page = tokens.get("page")
+    require(isinstance(page, dict), "page 必须存在且为对象")
+    if isinstance(page, dict):
+        require(isinstance(page.get("size"), str) and bool(page["size"].strip()),
+                "page.size 必须是非空字符串")
+        for key in ("width", "height", "bodyColumn"):
+            require(_is_number(page.get(key)) and page[key] > 0,
+                    f"page.{key} 必须是正数")
+        for margin_key in ("margin", "coverMargin", "tocMargin"):
+            margin = page.get(margin_key)
+            require(isinstance(margin, dict), f"page.{margin_key} 必须存在且为对象")
+            if isinstance(margin, dict):
+                for side in ("t", "b", "l", "r"):
+                    require(_is_number(margin.get(side)),
+                            f"page.{margin_key}.{side} 必须是数字")
+
+    font = tokens.get("font")
+    require(isinstance(font, dict) and bool(font), "font 必须存在且为非空对象")
+    if isinstance(font, dict):
+        for family, spec in font.items():
+            require(isinstance(spec, dict), f"font.{family} 必须是对象")
+            if isinstance(spec, dict):
+                for key in ("latin", "cjk"):
+                    value = spec.get(key)
+                    require(isinstance(value, str) and bool(value.strip()),
+                            f"font.{family}.{key} 必须是非空字符串")
+
+    type_tokens = tokens.get("type")
+    require(isinstance(type_tokens, dict), "type 必须存在且为对象")
+    if isinstance(type_tokens, dict):
+        for style in sorted(_TEXT_STYLES | _HEADING_STYLES):
+            spec = type_tokens.get(style)
+            require(isinstance(spec, dict), f"type.{style} 必须存在且为对象")
+            if not isinstance(spec, dict):
+                continue
+            require(_is_number(spec.get("size")) and spec["size"] > 0,
+                    f"type.{style}.size 必须是正数")
+            require(_is_number(spec.get("leading")) and spec["leading"] > 0,
+                    f"type.{style}.leading 必须是正数")
+            if style in _HEADING_STYLES:
+                require(_is_number(spec.get("spaceBefore")) and spec["spaceBefore"] >= 0,
+                        f"type.{style}.spaceBefore 必须是非负数字")
+                require(_is_number(spec.get("spaceAfter")) and spec["spaceAfter"] >= 0,
+                        f"type.{style}.spaceAfter 必须是非负数字")
+
+    numbers = tokens.get("numbers")
+    require(isinstance(numbers, dict), "numbers 必须存在且为对象")
+    if isinstance(numbers, dict):
+        require(numbers.get("type") in _NUMBER_TYPES,
+                "numbers.type 必须是 lining / old-style / auto 之一")
+        require(numbers.get("width") in _NUMBER_WIDTHS,
+                "numbers.width 必须是 proportional / tabular / auto 之一")
+
+    return issues
+
+
+MIN_TYPST_VERSION = (0, 15, 1)
+
+
+def check_typst_version(min_version: tuple[int, int, int] = MIN_TYPST_VERSION) -> list[Issue]:
+    """编译前检查 Typst 版本；number-type / number-width 需要较新版本。"""
+    if shutil.which("typst") is None:
+        return []                     # 交给 check_compile 报 ENV_TYPST_MISSING
+    proc = _run(["typst", "--version"])
+    if proc.returncode != 0:
+        return []
+    match = re.search(r"typst\s+(\d+)\.(\d+)\.(\d+)", proc.stdout or "", re.IGNORECASE)
+    if not match:
+        return []
+    found = tuple(int(x) for x in match.groups())
+    if found < tuple(min_version):
+        have = ".".join(str(x) for x in found)
+        need = ".".join(str(x) for x in min_version)
+        return [Issue(
+            "ENV_TYPST_TOO_OLD", "error",
+            f"Typst 版本过低：{have}，最低要求 {need}",
+            hint="升级 Typst 到 0.15.1 或更高；这是环境问题，不要改 AST",
+            where="typst", category="env")]
+    return []
 
 
 # ------------------------------------------------------------------ 1
@@ -365,7 +491,13 @@ def run_all(doc: dict, work_dir: Path, project_root: Path,
     themes_dir = project_root / "themes"
     tokens = load_tokens(theme, themes_dir)
 
-    issues: list[Issue] = []
+    issues: list[Issue] = validate_tokens(tokens) + check_typst_version()
+    if any(i.severity == "error" and i.category == "env" for i in issues):
+        report = Report(build_dir=str(work_dir.parent))
+        report.extend(issues)
+        report.write(work_dir.parent / "report.json")
+        return report.to_dict()
+
     issues += check_ast(doc, project_root / "schema" / "ast.schema.json")
     issues += check_toc(doc)
 

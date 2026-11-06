@@ -61,7 +61,10 @@ class Report:
         return bool(self.warns)
 
     def exit_code(self, published: bool = False) -> int:
-        if any(i.category == "env" or i.code.startswith(ENV_PREFIX) for i in self.issues):
+        # env 只有 error 才升级为 exit 3；env warn 不阻断交付。
+        if any(i.severity == "error"
+               and (i.category == "env" or i.code.startswith(ENV_PREFIX))
+               for i in self.issues):
             return EXIT_ENV
         if self.errors:
             return EXIT_ERROR

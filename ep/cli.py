@@ -16,6 +16,7 @@ from pathlib import Path
 
 from . import ast as astmod
 from . import gate, render_typst, toc, validate, publish
+from . import workspace as workspacemod
 from .normalize import InputUnreadableError, UnsupportedFormatError, normalize
 from .report import Issue, Report
 
@@ -36,7 +37,10 @@ def _typst_version() -> str:
 
 def _exit_code(report: dict) -> int:
     issues = report.get("issues", [])
-    if any(i.get("category") == "env" or i.get("code", "").startswith("ENV_") for i in issues):
+    # env 只有 error 才升级为 exit 3；env warn（如 THEME_TOKENS_UNKNOWN_KEY）不阻断。
+    if any(i.get("severity") == "error"
+           and (i.get("category") == "env" or i.get("code", "").startswith("ENV_"))
+           for i in issues):
         return 3
     if not report.get("ok"):
         return 1
@@ -57,15 +61,100 @@ def _fail_env(build_dir: Path, msg: str, manifest: dict | None = None) -> int:
     return 3
 
 
-def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
+def _preflight_output_dir(release_dir: Path) -> None:
+    """确认 workspace 发布目录可创建且可写；不留下临时文件。"""
+    release_dir.mkdir(parents=True, exist_ok=True)
+    probe = release_dir / ".ep-write-test"
+    try:
+        probe.write_text("essayprinter write test\n", encoding="utf-8")
+    finally:
+        try:
+            probe.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def build(src: Path | None, out_pdf: Path | None, theme: str = "article-annotated",
           preview: bool = False, keep_work: bool = True,
-          source_md: Path | None = None) -> int:
+          source_md: Path | None = None, workspace_config: Path | None = None,
+          name: str | None = None) -> int:
     """只接受 agent 产出的 AST；工具链不调用模型。"""
-    src = Path(src).resolve()
-    source_md = Path(source_md).resolve() if source_md else None
-    stem = src.stem[:-4] if src.stem.endswith(".ast") else src.stem
-    slug = stem.replace(" ", "-") or "doc"
-    build_dir = BUILD_ROOT / slug
+    # P1-7：先初始化，避免 workspace 解析抛异常后 except 分支引用未定义变量。
+    build_dir: Path | None = None
+    release_dir: Path = RELEASE_ROOT
+    owned_only = False
+    article: workspacemod.ArticlePaths | None = None
+    doc_key: str | None = None
+
+    src_path = Path(src).resolve() if src is not None else None
+    source_md_path = Path(source_md).resolve() if source_md is not None else None
+
+    if workspace_config is None:
+        if name is not None:
+            print("用法错误：--name 必须与 --workspace-config 同时使用", file=sys.stderr)
+            return 5
+        if src_path is None:
+            print("用法错误：legacy 模式必须提供 --from-ast", file=sys.stderr)
+            return 5
+        stem = src_path.stem[:-4] if src_path.stem.endswith(".ast") else src_path.stem
+        slug = stem.replace(" ", "-") or "doc"
+        build_dir = BUILD_ROOT / slug
+        release_dir = RELEASE_ROOT
+    else:
+        if name is None:
+            print("用法错误：--workspace-config 必须与 --name 同时使用", file=sys.stderr)
+            return 5
+        try:
+            config = workspacemod.load_config(workspace_config)
+            article = workspacemod.resolve_article(config, name, ROOT)
+        except workspacemod.WorkspaceConfigError as e:
+            print(f"workspace 配置错误：{e}", file=sys.stderr)
+            return 5
+        except workspacemod.WorkspaceUsageError as e:
+            print(f"workspace 用法错误：{e}", file=sys.stderr)
+            return 5
+        except workspacemod.WorkspaceInputError as e:
+            print(f"workspace 输入不可读：{e}", file=sys.stderr)
+            return 3
+
+        if src_path is not None and src_path != article.ast_path:
+            print(
+                "用法错误：workspace 模式下 AST 固定为 "
+                f"{article.ast_path}，不能使用 {src_path}",
+                file=sys.stderr,
+            )
+            return 5
+        src_path = article.ast_path
+        if source_md_path is None and article.normalized_path.exists():
+            source_md_path = article.normalized_path.resolve()
+        build_dir = article.build_dir
+        release_dir = article.release_dir
+        owned_only = True
+        doc_key = article.doc_key
+
+        try:
+            _preflight_output_dir(release_dir)
+        except OSError as e:
+            try:
+                build_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass
+            report = Report()
+            report.add(Issue(
+                "ENV_OUTPUT_UNWRITABLE", "error",
+                f"output_dir 不可写：{release_dir}：{e}",
+                hint="检查输出目录权限、磁盘空间或换一个可写目录",
+                where="output", category="env"))
+            try:
+                report.write(build_dir / "report.json")
+            except OSError:
+                pass
+            print(report.to_llm_text(), file=sys.stderr)
+            return 3
+
+    src = src_path
+    source_md = source_md_path
+    assert build_dir is not None
     attempt = 1
     old_manifest = build_dir / "manifest.json"
     if old_manifest.exists():
@@ -113,6 +202,19 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_file, dest)
 
+        workspace_manifest = None
+        if article is not None:
+            workspace_manifest = {
+                "name": article.name,
+                "slug": article.slug,
+                "name_hash": article.name_hash,
+                "build_dir": str(article.build_dir),
+                "config_path": str(article.config.config_path),
+                "config_sha256": article.config.config_sha256,
+                "source_dir": str(article.config.source_dir),
+                "output_dir": str(article.config.output_dir),
+                "release_dir": str(article.release_dir),
+            }
         manifest = {
             "input": str(src),
             "source_md": str(source_md) if source_md else None,
@@ -122,6 +224,8 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
             "theme_version": None,
             "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "params": {"preview": preview, "from_ast": True},
+            "doc_key": doc_key,
+            "workspace": workspace_manifest,
         }
 
         source_toc = None
@@ -137,7 +241,7 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
                          where="input"))
         report.write(build_dir / "report.json")
         publish.write_diagnostic(build_dir, report.to_dict(), manifest)
-        publish._mark_release_stale(RELEASE_ROOT)   # exit 1：本轮不得留下有效交付物
+        publish._mark_release_stale(release_dir, doc_key=doc_key, owned_only=owned_only)   # exit 1：本轮不得留下有效交付物
         return 1
     except Exception as e:
         return _fail_env(build_dir, f"输入不可读：{e}", manifest)
@@ -152,7 +256,7 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
         (build_dir / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         publish.write_diagnostic(build_dir, report.to_dict(), manifest)
-        publish._mark_release_stale(RELEASE_ROOT)   # exit 1：本轮不得留下有效交付物
+        publish._mark_release_stale(release_dir, doc_key=doc_key, owned_only=owned_only)   # exit 1：本轮不得留下有效交付物
         return 1
     if gate_report.errors:
         gate_report.write(build_dir / "report.json")
@@ -160,7 +264,7 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         publish.write_diagnostic(build_dir, gate_report.to_dict(), manifest)
         print(gate_report.to_llm_text(), file=sys.stderr)
-        publish._mark_release_stale(RELEASE_ROOT)   # exit 1：本轮不得留下有效交付物
+        publish._mark_release_stale(release_dir, doc_key=doc_key, owned_only=owned_only)   # exit 1：本轮不得留下有效交付物
         return gate_report.exit_code(published=False)
 
     astmod.dump(doc, work / "doc.json")
@@ -200,8 +304,9 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
         # 否则 release 写权限/磁盘错误会绕过 report.json 与 diagnostic.zip。
         try:
             published = publish.publish(
-                build_dir, doc, tokens, report, RELEASE_ROOT,
-                fonts_fp=fonts_fp, typst_version=typst_version, manifest=manifest)
+                build_dir, doc, tokens, report, release_dir,
+                fonts_fp=fonts_fp, typst_version=typst_version, manifest=manifest,
+                doc_key=doc_key, owned_only=owned_only)
             if published is None:
                 raise RuntimeError("work/out.pdf 不存在或 release 写入失败")
         except Exception as e:
@@ -228,7 +333,7 @@ def build(src: Path, out_pdf: Path | None, theme: str = "article-annotated",
                     report["counts"]["warn"] = report.get("counts", {}).get("warn", 0) + 1
 
     if not report.get("ok"):
-        publish._mark_release_stale(RELEASE_ROOT)
+        publish._mark_release_stale(release_dir, doc_key=doc_key, owned_only=owned_only)
         publish.recycle_failed(build_dir, attempt)
         report["exit_code"] = _exit_code(report)
         (build_dir / "report.json").write_text(
@@ -263,6 +368,46 @@ def cmd_normalize(args) -> int:
         return 3
     print(json.dumps({"output": str(Path(args.output).resolve()), "warnings": warnings},
                      ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_workspace(args) -> int:
+    """只读解析工作区配置并输出路径；不创建目录、不写文件。"""
+    if not args.workspace_config:
+        print("用法错误：workspace 必须提供 --workspace-config", file=sys.stderr)
+        return 5
+    try:
+        config = workspacemod.load_config(args.workspace_config)
+        if args.name is not None:
+            article = workspacemod.resolve_article(config, args.name, ROOT)
+            payload = workspacemod.article_to_dict(article)
+        else:
+            if not config.source_dir.is_dir():
+                raise workspacemod.WorkspaceInputError(
+                    f"source_dir 不存在或不是目录：{config.source_dir}")
+            try:
+                articles = sorted(
+                    (p.name for p in config.source_dir.iterdir() if p.is_dir()),
+                    key=str.casefold,
+                )
+            except OSError as exc:
+                raise workspacemod.WorkspaceInputError(
+                    f"source_dir 不可读：{config.source_dir}") from exc
+            payload = {
+                "config": workspacemod.config_to_dict(config),
+                "articles": articles,
+            }
+    except workspacemod.WorkspaceConfigError as e:
+        print(f"workspace 配置错误：{e}", file=sys.stderr)
+        return 5
+    except workspacemod.WorkspaceUsageError as e:
+        print(f"workspace 用法错误：{e}", file=sys.stderr)
+        return 5
+    except workspacemod.WorkspaceInputError as e:
+        print(f"workspace 输入不可读：{e}", file=sys.stderr)
+        return 3
+
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -350,7 +495,8 @@ def main(argv: list | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     b = sub.add_parser("build", help="AST -> 门禁 -> 渲染 -> 自检 -> 发布")
-    b.add_argument("--from-ast", required=True, help="agent 产出的 doc.json")
+    b.add_argument("--from-ast", default=None,
+                   help="agent 产出的 doc.json；workspace 模式下可省略（默认 article_dir/doc.json）")
     b.add_argument("--source-md", default=None,
                    help="可选：源 Markdown，用于判断 toc.detected")
     b.add_argument("-o", "--output", default=None,
@@ -359,11 +505,23 @@ def main(argv: list | None = None) -> int:
     b.add_argument("--preview", action="store_true")
     b.add_argument("--keep-work", action=argparse.BooleanOptionalAction, default=True,
                    help="失败时保留 work/ 诊断包；成功时可用 --no-keep-work 清理栅格/预览")
+    b.add_argument("--workspace-config", default=None,
+                   help="工作区配置 JSON；不传则保持旧的 release/ 行为")
+    b.add_argument("--name", default=None,
+                   help="文章名；必须与 --workspace-config 同时使用")
     b.set_defaults(func=lambda a: build(
-        Path(a.from_ast),
+        Path(a.from_ast) if a.from_ast else None,
         Path(a.output) if a.output else None,
         a.theme, a.preview, a.keep_work,
-        Path(a.source_md) if a.source_md else None))
+        Path(a.source_md) if a.source_md else None,
+        Path(a.workspace_config) if a.workspace_config else None,
+        a.name))
+
+    w = sub.add_parser("workspace", help="解析工作区配置并打印路径")
+    w.add_argument("--workspace-config", default=None,
+                   help="工作区配置 JSON；必填，未传 -> exit 5")
+    w.add_argument("--name", default=None)
+    w.set_defaults(func=cmd_workspace)
 
     n = sub.add_parser("normalize", help="确定性归一化（不调模型）")
     n.add_argument("input")

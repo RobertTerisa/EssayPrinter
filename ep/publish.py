@@ -183,10 +183,12 @@ def artifact_id(doc: dict, tokens: dict, fonts_fp: str = "",
 # ---------------------------------------------------------------------
 def publish(build_dir: Path, doc: dict, tokens: dict, report: dict,
             release_dir: Path, fonts_fp: str = "", typst_version: str = "",
-            manifest: dict | None = None) -> Path | None:
+            manifest: dict | None = None, doc_key: str | None = None,
+            owned_only: bool = False) -> Path | None:
     """自检通过才发布；否则返回 None，且 release 目录不发生任何变化。"""
+    doc_key = doc_key or build_dir.name or "document"
     if not report.get("ok"):
-        _mark_release_stale(release_dir)
+        _mark_release_stale(release_dir, doc_key=doc_key, owned_only=owned_only)
         return None
 
     src = build_dir / "work" / "out.pdf"
@@ -198,7 +200,6 @@ def publish(build_dir: Path, doc: dict, tokens: dict, report: dict,
     pdf_h = pdf_content_hash(src)
     aid = artifact_id(doc, tokens, fonts_fp, typst_version)
     title = _display_title(doc, build_dir)
-    doc_key = build_dir.name or "document"
     target = release_dir / f"{_safe_filename(title)}-{aid}.pdf"
     tmp = target.with_name(target.name + ".part")
 
@@ -230,7 +231,8 @@ def publish(build_dir: Path, doc: dict, tokens: dict, report: dict,
     # 成功发布后，清掉同一文档的旧版本。标题会变，不能再靠文件名前缀判断，
     # 因此以 manifest 的 doc_key 为主，同时兼容旧版 `<slug>-<aid>.pdf` 命名。
     _purge_doc_versions(release_dir, doc_key=doc_key,
-                        keep_names={target.name, target.stem + ".manifest.json"})
+                        keep_names={target.name, target.stem + ".manifest.json"},
+                        owned_only=owned_only)
     return target
 
 
@@ -282,25 +284,45 @@ def write_diagnostic(build_dir: Path, report: dict,
     return diag
 
 
-def _mark_release_stale(release_dir: Path, keep: Path | None = None) -> None:
+def _mark_release_stale(release_dir: Path, keep: Path | None = None,
+                        doc_key: str | None = None,
+                        owned_only: bool = False) -> None:
     """本轮失败：把上一轮遗留的交付物标记为过期，避免被冒充。
 
-    跨平台必须用 `os.replace`，不能用 `Path.rename`：
-    Windows 下 `rename` 目标已存在会抛 FileExistsError；`os.replace` 会原子覆盖。
-    跳过已经 stale 的文件，避免 `a.stale.pdf -> a.stale.stale.pdf` 无限叠加。
+    - legacy（owned_only=False）：保持旧行为，处理 release 目录内全部 PDF；
+    - workspace（owned_only=True）：只处理同名 manifest 存在且 doc_key 相同的 PDF；
+      没有 manifest 的 PDF（例如用户自己的文件）一律不动。
     """
     if not release_dir.exists():
         return
+    if owned_only and not doc_key:
+        print("[publish] owned_only 模式缺少 doc_key，跳过 stale 标记", file=sys.stderr)
+        return
+
     for pdf in release_dir.glob("*.pdf"):
         if pdf.name.endswith(".stale.pdf"):
             continue
         if keep is not None and pdf.resolve() == keep.resolve():
             continue
+
+        man = pdf.with_name(pdf.stem + ".manifest.json")
+        if owned_only:
+            if not man.is_file():
+                print(f"[publish] 跳过无 manifest 的 PDF: {pdf.name}", file=sys.stderr)
+                continue
+            try:
+                m = json.loads(man.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"[publish] 跳过不可读 manifest 的 PDF: {pdf.name}: {e}",
+                      file=sys.stderr)
+                continue
+            if not isinstance(m, dict) or _manifest_doc_key(m) != doc_key:
+                continue
+
         target = pdf.with_name(pdf.stem + ".stale.pdf")
         try:
             os.replace(pdf, target)      # 跨平台覆盖；不要用 pdf.rename(target)
             # 同名 manifest 一起标记为 stale，避免它继续描述一个已过期 PDF
-            man = pdf.with_name(pdf.stem + ".manifest.json")
             if man.exists():
                 os.replace(man, pdf.with_name(pdf.stem + ".stale.manifest.json"))
         except OSError as e:
@@ -309,13 +331,14 @@ def _mark_release_stale(release_dir: Path, keep: Path | None = None) -> None:
 
 
 def _purge_doc_versions(release_dir: Path, doc_key: str,
-                        keep_names: set[str] | None = None) -> None:
+                        keep_names: set[str] | None = None,
+                        owned_only: bool = False) -> None:
     """成功发布后清理同一文档的旧交付物。
 
-    - 主路径：读 `*.manifest.json` 的 `doc_key` 定位同一文档；兼容旧版 manifest
-      用 `input` 重新推导 doc_key 的情况；
-    - 兼容旧命名：删除 `release/<doc_key>-<12位artifact_id>[.stale].pdf/manifest.json`；
-    - 只删除 manifest 明确引用的文件和当前文档的旧命名文件，不按宽泛前缀误删。
+    - legacy（owned_only=False）：主路径读 manifest 的 doc_key；同时兼容旧版
+      `<doc_key>-<12位artifact_id>[.stale].pdf/manifest.json` 命名。
+    - workspace（owned_only=True）：只删除 manifest 明确引用的文件和 manifest
+      自身；没有 manifest 的旧文件、用户 PDF 一律不动，也不按文件名正则清理。
     """
     if not release_dir.exists():
         return
@@ -337,18 +360,21 @@ def _purge_doc_versions(release_dir: Path, doc_key: str,
         pdf_name = m.get("pdf")
         if pdf_name:
             doomed.add(str(pdf_name))
-        # manifest 与 PDF 同名；旧版 stale manifest 也能通过 basename 找到 stale PDF。
-        base = man.name[:-len(".manifest.json")]
-        doomed.add(base + ".pdf")
+        if not owned_only:
+            # legacy 兼容：manifest 与 PDF 同名；旧版 stale manifest 也能通过
+            # basename 找到 stale PDF。
+            base = man.name[:-len(".manifest.json")]
+            doomed.add(base + ".pdf")
 
-    # 旧版命名没有 doc_key 时也要能清理；只匹配精确的 artifact_id 形状。
-    legacy = re.compile(
-        rf"^{re.escape(doc_key)}-[0-9a-f]{{12}}(?:\.stale)?\.(?:pdf|manifest\.json)$")
-    for p in release_dir.iterdir():
-        if p.name in keep:
-            continue
-        if legacy.match(p.name):
-            doomed.add(p.name)
+    if not owned_only:
+        # 旧版命名没有 doc_key 时也要能清理；只匹配精确的 artifact_id 形状。
+        legacy = re.compile(
+            rf"^{re.escape(doc_key)}-[0-9a-f]{{12}}(?:\.stale)?\.(?:pdf|manifest\.json)$")
+        for p in release_dir.iterdir():
+            if p.name in keep:
+                continue
+            if legacy.match(p.name):
+                doomed.add(p.name)
 
     for name in doomed:
         if not name or name in keep:

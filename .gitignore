@@ -7,3 +7,5 @@ __pycache__/
 agent_development.md
 *.png
 *.pdf
+develop_log.md
+ep.workspace.json

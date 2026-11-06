@@ -81,8 +81,12 @@
     },
   )
 
-  set text(font: font-of("body"), size: sz("body"), fill: ink("body"),
-           lang: "zh", region: "cn")
+  set text(
+    font: font-of("body"), size: sz("body"), fill: ink("body"),
+    number-type: T.numbers.type,
+    number-width: T.numbers.width,
+    lang: "zh", region: "cn",
+  )
   set par(leading: lead("body"), justify: true, spacing: 0pt,
           first-line-indent: (amount: T.para.indent * 1em, all: true))
   set heading(numbering: (..nums) => {

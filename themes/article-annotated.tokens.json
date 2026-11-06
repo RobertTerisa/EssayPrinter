@@ -1,7 +1,11 @@
 {
   "name": "article-annotated",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "mode": "print",
+  "numbers": {
+    "type": "lining",
+    "width": "tabular"
+  },
   "derivedFrom": "Super-agent设计探索_批注版.docx",
   "page": {
     "size": "a4",
@@ -123,38 +127,38 @@
     "h1": {
       "size": 16,
       "leading": 1.35,
-      "spaceBefore": 20,
-      "spaceAfter": 10
+      "spaceBefore": 33.6,
+      "spaceAfter": 21.6
     },
     "h2": {
       "size": 16,
       "leading": 1.4,
-      "spaceBefore": 14,
-      "spaceAfter": 7
+      "spaceBefore": 32.4,
+      "spaceAfter": 21.6
     },
     "h3": {
       "size": 16,
       "leading": 1.4,
-      "spaceBefore": 10,
-      "spaceAfter": 5
+      "spaceBefore": 31.2,
+      "spaceAfter": 21.6
     },
     "h4": {
       "size": 15,
       "leading": 1.35,
-      "spaceBefore": 14,
-      "spaceAfter": 6
+      "spaceBefore": 30.6,
+      "spaceAfter": 21.6
     },
     "h5": {
       "size": 13.5,
       "leading": 1.4,
-      "spaceBefore": 12,
-      "spaceAfter": 5
+      "spaceBefore": 30.0,
+      "spaceAfter": 21.6
     },
     "h6": {
       "size": 12,
       "leading": 1.4,
-      "spaceBefore": 10,
-      "spaceAfter": 4
+      "spaceBefore": 29.6,
+      "spaceAfter": 21.6
     },
     "header": {
       "size": 9,
