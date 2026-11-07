@@ -87,7 +87,7 @@
     number-width: T.numbers.width,
     lang: "zh", region: "cn",
   )
-  set par(leading: lead("body"), justify: true, spacing: 0pt,
+  set par(leading: lead("body"), justify: false, spacing: 0pt,
           first-line-indent: (amount: T.para.indent * 1em, all: true))
   set heading(numbering: (..nums) => {
     let n = nums.pos()

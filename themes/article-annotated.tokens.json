@@ -1,6 +1,6 @@
 {
   "name": "article-annotated",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "mode": "print",
   "numbers": {
     "type": "lining",
