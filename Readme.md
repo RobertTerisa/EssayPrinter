@@ -6,13 +6,18 @@
 
 使用时请在 DeepSeek Harness 中打开该项目文件夹作为工作区，将含有文章的 `.html` / `.md` / `.pdf` / `.docx` 引用并要求 LLM 进行排版即可；agent 的具体工作流程由工作区内的 `AGENTS.md` 约束。
 
+
+
 >当前对中文排版支持最好，其他语言可用但不保证效果。
 
 > P1.18（packaging / console entry point）暂缓，因此所有命令统一写作 `python -m ep.cli <subcommand>`，不使用裸 `ep`。
 
+
 > 运行环境：需要 Typst **0.15.1 或更高版本**；`number-type` / `number-width` 依赖该版本。低于最低版本时构建前返回 `ENV_TYPST_TOO_OLD`（exit 3）。
 
 > **<font color="red">本项目仅限于个人用户学习交流使用，请勿用于商业出版、盗版等行为。任何由用户引起的版权纠纷由用户自行承担，本人概不负责！</font>**
+
+> **由于本人初入开源社区未注意字体问题误使用闭源字体并打tag导致旧版本出现协议污染，现已修正，特此声明**
 
 ---
 

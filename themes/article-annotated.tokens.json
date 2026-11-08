@@ -46,22 +46,22 @@
   },
   "font": {
     "body": {
-      "latin": "Georgia",
+      "latin": "Source Serif 4",
       "cjk": "Source Han Serif SC",
       "weight": 400
     },
     "sans": {
-      "latin": "Segoe UI",
+      "latin": "Noto Sans",
       "cjk": "Noto Sans SC",
       "weight": 600
     },
     "quote": {
-      "latin": "Georgia",
+      "latin": "Source Serif 4",
       "cjk": "Source Han Serif SC",
       "style": "italic"
     },
     "mono": {
-      "latin": "Consolas",
+      "latin": "JetBrains Mono",
       "cjk": "Noto Sans SC"
     }
   },
