@@ -167,3 +167,7 @@ python -m ep.cli build --workspace-config ep.workspace.json --name <name> --sour
 | `1` | 内容/流水线失败，本次不发布；按 `report.json` 的 `issues` 修复 AST |
 | `3` | 环境错误：输入不可读、`source_dir`/`article_dir` 不可用、`output_dir` 不可写、typst/字体依赖缺失等；停止重试 |
 | `5` | 命令行或配置错误：非法 `name`、缺少参数、多输入、workspace 配置错误等；不要改 AST |
+
+
+
+本项目使用all2md(MIT协议)和Typst1(Apache 2.0 License),具体参阅licenses文件夹
