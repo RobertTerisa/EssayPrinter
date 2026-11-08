@@ -36,8 +36,8 @@
     doc.json + theme.tokens.json  ->  doc.typ  ->  typst compile  ->  out.pdf
     页码、图号、章号、交叉引用、运行页眉、PDF 书签 全部由 Typst 计算
   ▼
-[4] 自检 validate —— 确定性 · 5 项硬指标
-    AST schema ／ 页边溢出 ／ 字体嵌入 ／ 图片有效 DPI ／ 目录一致性
+[4] 自检 validate —— 确定性 · 6 项硬指标
+    AST schema ／ 页边溢出 ／ 字体嵌入 ／ 图片有效 DPI ／ 目录一致性 ／ 封面单页
     失败 -> 结构化报告交给 agent 修复后重跑（≤3 次）；仍失败则终止，不发布任何交付物
   ▼
 [5] 发布 publish —— 全有或全无

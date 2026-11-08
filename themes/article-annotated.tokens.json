@@ -1,6 +1,6 @@
 {
   "name": "article-annotated",
-  "version": "0.3.4",
+  "version": "0.3.6",
   "mode": "print",
   "numbers": {
     "type": "lining",
@@ -122,41 +122,41 @@
     },
     "caption": {
       "size": 12,
-      "leading": 1.2
+      "leading": 1.6
     },
     "h1": {
       "size": 16,
-      "leading": 1.35,
+      "leading": 1.5,
       "spaceBefore": 33.6,
       "spaceAfter": 21.6
     },
     "h2": {
       "size": 16,
-      "leading": 1.4,
+      "leading": 1.5,
       "spaceBefore": 32.4,
       "spaceAfter": 21.6
     },
     "h3": {
       "size": 16,
-      "leading": 1.4,
+      "leading": 1.5,
       "spaceBefore": 31.2,
       "spaceAfter": 21.6
     },
     "h4": {
       "size": 15,
-      "leading": 1.35,
+      "leading": 1.5,
       "spaceBefore": 30.6,
       "spaceAfter": 21.6
     },
     "h5": {
       "size": 13.5,
-      "leading": 1.4,
+      "leading": 1.5,
       "spaceBefore": 30.0,
       "spaceAfter": 21.6
     },
     "h6": {
       "size": 12,
-      "leading": 1.4,
+      "leading": 1.5,
       "spaceBefore": 29.6,
       "spaceAfter": 21.6
     },
@@ -187,15 +187,15 @@
     },
     "coverTitle": {
       "size": 34,
-      "leading": 1.2
+      "leading": 1.4
     },
     "coverSub": {
       "size": 26,
-      "leading": 1.25
+      "leading": 1.4
     },
     "coverLatin": {
       "size": 15,
-      "leading": 1.4
+      "leading": 1.45
     },
     "coverMeta": {
       "size": 12,

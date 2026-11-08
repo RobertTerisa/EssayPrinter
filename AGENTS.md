@@ -87,7 +87,7 @@ python -m ep.cli build --from-ast doc.json --source-md source.norm.md
 可选预检（同一套 gate 逻辑）：
 `python -m ep.cli gate <doc.json> --source-md <source.norm.md>`。
 
-脚本会依次完成：AST 门禁（schema/白名单/TOC 重生成/ref）→ 合并主题样式 → 生成 doc.typ → typst 编译 → 五项自检。
+脚本会依次完成：AST 门禁（schema/白名单/TOC 重生成/ref）→ 合并主题样式 → 生成 doc.typ → typst 编译 → 六项自检。
 
 ### 第 5 步 · 读退出码
 

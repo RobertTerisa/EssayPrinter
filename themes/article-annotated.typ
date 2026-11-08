@@ -215,54 +215,66 @@
   )
   set par(first-line-indent: (amount: 0pt, all: false), justify: false)
 
-  v(38mm)
-  align(center, {
-    set text(font: font-of("sans"), size: sz("coverKicker"), fill: ink("muted"),
-             tracking: ts("coverKicker").tracking * 1pt)
-    upper(meta.at("kicker", default: "ESSAY PRINTER"))
-  })
-  v(6mm)
-  align(center, line(length: 22%, stroke: 1.2pt + ink("accent")))
-  v(10mm)
-
-  align(center, {
-    set text(font: font-of("sans"), size: sz("coverTitle"), weight: "semibold", fill: ink("strong"))
-    set par(leading: lead("coverTitle"), justify: false)
-    meta.at("title", default: "")
-  })
-  if meta.at("subtitle", default: "") != "" {
-    v(4mm)
+  // 封面正文先抽成值：cover 用 v(1fr) 弹性留白，内容超高时 Typst 不会重叠，
+  // 而是把溢出部分排到第 2 页，把目录 / 正文整体后移。所以先量再排。
+  let cover-body = {
+    v(38mm)
     align(center, {
-      set text(font: font-of("sans"), size: sz("coverSub"), weight: "semibold", fill: ink("strong"))
-      set par(leading: lead("coverSub"), justify: false)
-      meta.at("subtitle")
+      set text(font: font-of("sans"), size: sz("coverKicker"), fill: ink("muted"),
+               tracking: ts("coverKicker").tracking * 1pt)
+      upper(meta.at("kicker", default: "ESSAY PRINTER"))
     })
-  }
-  if meta.at("subtitle_latin", default: "") != "" {
     v(6mm)
+    align(center, line(length: 22%, stroke: 1.2pt + ink("accent")))
+    v(10mm)
+
     align(center, {
-      set text(font: font-of("quote"), size: sz("coverLatin"), style: "italic", fill: ink("muted"))
-      meta.at("subtitle_latin")
+      set text(font: font-of("sans"), size: sz("coverTitle"), weight: "semibold", fill: ink("strong"))
+      set par(leading: lead("coverTitle"), justify: false)
+      meta.at("title", default: "")
     })
+    if meta.at("subtitle", default: "") != "" {
+      v(4mm)
+      align(center, {
+        set text(font: font-of("sans"), size: sz("coverSub"), weight: "semibold", fill: ink("strong"))
+        set par(leading: lead("coverSub"), justify: false)
+        meta.at("subtitle")
+      })
+    }
+    if meta.at("subtitle_latin", default: "") != "" {
+      v(6mm)
+      align(center, {
+        set text(font: font-of("quote"), size: sz("coverLatin"), style: "italic", fill: ink("muted"))
+        meta.at("subtitle_latin")
+      })
+    }
+
+    v(1fr)
+    align(center, {
+      set text(size: sz("coverMeta"), fill: ink("meta"))
+      set par(leading: lead("coverMeta"), justify: false)
+      for k in ("author", "date", "source") {
+        if meta.at(k, default: "") != "" { meta.at(k); linebreak() }
+      }
+      if meta.at("url", default: "") != "" { link(meta.at("url")) }
+    })
+    v(20mm)
   }
 
-  v(1fr)
-  align(center, {
-    set text(size: sz("coverMeta"), fill: ink("meta"))
-    set par(leading: lead("coverMeta"), justify: false)
-    for k in ("author", "date", "source") {
-      if meta.at(k, default: "") != "" { meta.at(k); linebreak() }
-    }
-    if meta.at("url", default: "") != "" { link(meta.at("url")) }
-  })
-  v(20mm)
+  // 封面单页守卫：measure 里 1fr 按 0 计，得到"最小所需高度"，
+  // 供 ep.validate.check_cover_fit 用 typst eval/query 读出后判定是否溢出。
+  context {
+    let one-mm = 1mm
+    let avail = page.height - (T.page.coverMargin.t + T.page.coverMargin.b) * one-mm
+    let wide = page.width - (T.page.coverMargin.l + T.page.coverMargin.r) * one-mm
+    let need = measure(block(width: wide, cover-body)).height
+    place([#metadata((need_pt: need.pt(), avail_pt: avail.pt()))<ep-cover-fit>])
+  }
 
+  cover-body
   pagebreak()
 }
 
-// ---------------------------------------------------------------------
-// 目录：16.9/14.8/25/25；无页码/页眉/页脚/竖线；目录独占页
-// ---------------------------------------------------------------------
 #let tocblock(title: "目录", depth: 2) = {
   pagebreak(weak: true)
   set page(

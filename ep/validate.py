@@ -1,4 +1,4 @@
-"""五项确定性自检。任何一项 error 都会中止交付并把报告回灌 LLM。"""
+"""六项确定性自检。任何一项 error 都会中止交付并把报告回灌 LLM。"""
 from __future__ import annotations
 
 import json
@@ -469,6 +469,56 @@ def check_images(doc: dict, base_dir: Path, text_width_mm: float,
     return issues
 
 
+# ------------------------------------------------------------------ 6
+COVER_FIT_LABEL = "<ep-cover-fit>"
+
+
+def check_cover_fit(typ_path: Path, tol_pt: float = 1.0) -> list[Issue]:
+    """封面单页守卫：读主题在渲染期量出的封面"最小所需高度"与"可用高度"。
+
+    cover 用 `v(1fr)` 做弹性留白，一旦内容比可用高度还高，Typst 不会让内容
+    重叠，而是把溢出部分排到第 2 页，把目录 / 正文整体后移 —— 这种破版
+    不能用栅格墨迹类检查发现，所以在渲染期由主题 `measure` 量好报上来。
+    判为 warn：封面文字来自 AST 的 meta，agent 无权为版式改写正文。
+    """
+    if shutil.which("typst") is None or not typ_path.exists():
+        return []
+
+    # 0.15.1 起推荐 eval；query 已标记 deprecated，作兜底。
+    proc = _run(["typst", "eval",
+                 f"query({COVER_FIT_LABEL}).first().value",
+                 "--in", typ_path.name], cwd=typ_path.parent)
+    if proc.returncode != 0:
+        proc = _run(["typst", "query", typ_path.name, COVER_FIT_LABEL,
+                     "--field", "value", "--one"], cwd=typ_path.parent)
+    if proc.returncode != 0:
+        return [Issue("COVER_FIT_UNMEASURED", "warn",
+                      "无法读取封面高度度量，封面单页守卫本次跳过",
+                      hint="主题 cover() 应带 <ep-cover-fit> 度量；此项只影响提示，不影响交付",
+                      where=typ_path.name, category="env")]
+
+    try:
+        value = json.loads((proc.stdout or "").strip() or "{}")
+        need_pt = float(value["need_pt"])
+        avail_pt = float(value["avail_pt"])
+    except Exception:
+        return [Issue("COVER_FIT_UNMEASURED", "warn",
+                      "封面高度度量格式无法解析，封面单页守卫本次跳过",
+                      hint="主题 cover() 的 metadata 应为 (need_pt:, avail_pt:)，不影响交付",
+                      where=typ_path.name, category="env")]
+
+    if need_pt <= avail_pt + tol_pt:
+        return []
+    mm = 72.0 / 25.4
+    return [Issue("COVER_OVERFLOW", "warn",
+                  f"封面内容需要 {need_pt / mm:.1f}mm，可用 {avail_pt / mm:.1f}mm，"
+                  f"超出 {(need_pt - avail_pt) / mm:.1f}mm；溢出部分会被排到第 2 页，"
+                  f"把目录 / 正文整体后移",
+                  hint="缩短封面标题或副标题，或调小 themes 的 coverTitle / coverSub 字号与行距；"
+                       "封面文字来自 AST meta，不得为凑版式改写正文",
+                  where="cover")]
+
+
 def pdf_text_stats(pdf_path: Path) -> dict:
     """页数 / 总字数 / 每页字数；字数 = 去掉空白后的字符数。"""
     try:
@@ -508,6 +558,7 @@ def run_all(doc: dict, work_dir: Path, project_root: Path,
     issues += compile_issues
 
     if pdf.exists():
+        issues += check_cover_fit(typ)
         issues += check_fonts(pdf)
     if raster_dir.exists():
         issues += check_margin_overflow(raster_dir)
