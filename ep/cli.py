@@ -411,6 +411,25 @@ def cmd_workspace(args) -> int:
     return 0
 
 
+def cmd_clean(args) -> int:
+    """清理可证明属于 EssayPrinter 的 stale PDF；默认 dry-run。"""
+    try:
+        config = workspacemod.load_config(args.workspace_config)
+        workspacemod.validate_name(args.name)
+    except workspacemod.WorkspaceConfigError as e:
+        print(f"workspace 配置错误：{e}", file=sys.stderr)
+        return 5
+    except workspacemod.WorkspaceUsageError as e:
+        print(f"workspace 用法错误：{e}", file=sys.stderr)
+        return 5
+
+    release_dir = config.output_dir / args.name
+    result = publish.clean_stale(
+        release_dir, doc_key=args.name, dry_run=not args.apply)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 2 if result["skipped"] else 0
+
+
 def cmd_gate(args) -> int:
     # P1-3：gate 是 agent 的预检入口，输入/结构错误也必须输出结构化 report，
     # 不能抛 traceback。
@@ -546,6 +565,13 @@ def main(argv: list | None = None) -> int:
     v.add_argument("--source-md", default=None, help="可选：与 build 相同的源 Markdown，用于 gate")
     v.add_argument("--theme", default="article-annotated")
     v.set_defaults(func=cmd_verify)
+
+    cl = sub.add_parser("clean", help="清理可证明属于 EssayPrinter 的 stale PDF")
+    cl.add_argument("--workspace-config", required=True)
+    cl.add_argument("--name", required=True)
+    cl.add_argument("--apply", action="store_true",
+                    help="实际删除；默认只 dry-run 列出候选")
+    cl.set_defaults(func=cmd_clean)
 
     t = sub.add_parser("toc", help="调试目录识别")
     t.add_argument("input")
