@@ -29,6 +29,8 @@ AST_HASH_KEY = "/EssayPrinterAstHash"
 TOKENS_HASH_KEY = "/EssayPrinterTokensHash"
 FONT_FP_KEY = "/EssayPrinterFontFingerprint"
 PDF_HASH_KEY = "/EssayPrinterPdfContentSha256"
+DOC_KEY = "/EssayPrinterDocKey"
+STALE_PDF_RE = re.compile(r"^(?P<stem>.+)-(?P<aid>[0-9a-f]{12})\.stale\.pdf$")
 
 # 文件名中标题部分的最大字符数（不含 artifact_id 与扩展名）。
 # 限制长度是为了避免 Windows 长路径、某些同步盘和压缩工具的路径限制。
@@ -206,7 +208,8 @@ def publish(build_dir: Path, doc: dict, tokens: dict, report: dict,
     release_dir.mkdir(parents=True, exist_ok=True)
     try:
         shutil.copy2(src, tmp)
-        _stamp(tmp, aid, ast_h, tok_h, fonts_fp, pdf_h)  # 写入产物标识 + hash
+        _stamp(tmp, aid, ast_h, tok_h, fonts_fp, pdf_h,
+               doc_key=doc_key or "")  # 写入产物标识 + hash
         os.replace(tmp, target)                         # 原子改名，绝不出现半成品
     except Exception:
         tmp.unlink(missing_ok=True)                     # 失败时清掉 .part，release 不留半成品
@@ -357,14 +360,15 @@ def _purge_doc_versions(release_dir: Path, doc_key: str,
             continue
 
         doomed.add(man.name)
+        # manifest 与 PDF basename 一致：x.manifest.json -> x.pdf；
+        # stale manifest 同样成立：x.stale.manifest.json -> x.stale.pdf。
+        # 这一步不能只放在 legacy 分支里，否则 workspace 模式的成功发布会
+        # 删掉 stale manifest 却留下孤儿 x.stale.pdf。
+        base = man.name[:-len(".manifest.json")]
+        doomed.add(base + ".pdf")
         pdf_name = m.get("pdf")
         if pdf_name:
             doomed.add(str(pdf_name))
-        if not owned_only:
-            # legacy 兼容：manifest 与 PDF 同名；旧版 stale manifest 也能通过
-            # basename 找到 stale PDF。
-            base = man.name[:-len(".manifest.json")]
-            doomed.add(base + ".pdf")
 
     if not owned_only:
         # 旧版命名没有 doc_key 时也要能清理；只匹配精确的 artifact_id 形状。
@@ -445,7 +449,7 @@ def verify(pdf: Path, expected_doc: dict | None = None,
 
 
 def _stamp(pdf: Path, aid: str, ast_h: str, tok_h: str,
-           fonts_fp: str, pdf_h: str) -> None:
+           fonts_fp: str, pdf_h: str, doc_key: str = "") -> None:
     """把 artifact_id 与 hash 写进 PDF 元数据（不改变页面内容）。"""
     try:
         from pypdf import PdfReader, PdfWriter
@@ -453,14 +457,17 @@ def _stamp(pdf: Path, aid: str, ast_h: str, tok_h: str,
         return
     reader = PdfReader(str(pdf))
     writer = PdfWriter(clone_from=reader)
-    writer.add_metadata({
+    metadata = {
         "/Producer": "EssayPrinter",
         ARTIFACT_KEY: aid,
         AST_HASH_KEY: ast_h,
         TOKENS_HASH_KEY: tok_h,
         FONT_FP_KEY: fonts_fp,
         PDF_HASH_KEY: pdf_h,
-    })
+    }
+    if doc_key:
+        metadata[DOC_KEY] = doc_key
+    writer.add_metadata(metadata)
     with open(pdf, "wb") as fh:
         writer.write(fh)
 
@@ -472,4 +479,94 @@ def _read_stamp(pdf: Path) -> dict:
         return {}
     meta = PdfReader(str(pdf)).metadata or {}
     return {k: meta.get(k) for k in (ARTIFACT_KEY, AST_HASH_KEY, TOKENS_HASH_KEY,
-                                     FONT_FP_KEY, PDF_HASH_KEY) if meta.get(k)}
+                                     FONT_FP_KEY, PDF_HASH_KEY, DOC_KEY) if meta.get(k)}
+
+
+def clean_stale(release_dir: Path, doc_key: str | None = None,
+                dry_run: bool = True) -> dict:
+    """清理 release_dir 中可证明属于 EssayPrinter 的 ``*.stale.pdf``。
+
+    默认 dry-run；只有 ``dry_run=False`` 时才真正删除。
+    删除条件（全部满足）：
+      1. 文件名符合 ``<title>-<12hex>.stale.pdf``；
+      2. PDF 元数据 artifact_id 与文件名中的 12hex 一致；
+      3. PDF 内容 hash 与元数据一致（若元数据带该字段）；
+      4. 若 PDF 带 doc_key 元数据且调用方给了 doc_key，则必须一致。
+    不满足条件的文件只记入 skipped，绝不删除。
+    """
+    result: dict = {
+        "release_dir": str(release_dir),
+        "dry_run": bool(dry_run),
+        "candidates": [],
+        "removed": [],
+        "skipped": [],
+    }
+    if not release_dir.is_dir():
+        result["skipped"].append({
+            "file": str(release_dir),
+            "reason": "release_dir 不存在或不是目录",
+        })
+        return result
+
+    for pdf in sorted(release_dir.glob("*.stale.pdf")):
+        m = STALE_PDF_RE.match(pdf.name)
+        if not m:
+            result["skipped"].append({
+                "file": pdf.name,
+                "reason": "文件名不是 <title>-<12hex>.stale.pdf",
+            })
+            continue
+
+        try:
+            stamp = _read_stamp(pdf)
+        except Exception as e:
+            result["skipped"].append({
+                "file": pdf.name,
+                "reason": f"PDF 不可读：{e}",
+            })
+            continue
+        if stamp.get(ARTIFACT_KEY) != m.group("aid"):
+            result["skipped"].append({
+                "file": pdf.name,
+                "reason": "PDF 元数据 artifact_id 缺失或与文件名不一致",
+            })
+            continue
+
+        stored_hash = stamp.get(PDF_HASH_KEY)
+        if stored_hash:
+            try:
+                actual_hash = pdf_content_hash(pdf)
+            except Exception as e:
+                result["skipped"].append({
+                    "file": pdf.name,
+                    "reason": f"无法计算 PDF 内容 hash：{e}",
+                })
+                continue
+            if stored_hash != actual_hash:
+                result["skipped"].append({
+                    "file": pdf.name,
+                    "reason": "PDF 内容 hash 与元数据不一致",
+                })
+                continue
+
+        stamped_doc_key = stamp.get(DOC_KEY)
+        if doc_key and stamped_doc_key and stamped_doc_key != doc_key:
+            result["skipped"].append({
+                "file": pdf.name,
+                "reason": f"doc_key 不匹配：{stamped_doc_key}",
+            })
+            continue
+
+        if dry_run:
+            result["candidates"].append(pdf.name)
+            continue
+        try:
+            pdf.unlink()
+        except OSError as e:
+            result["skipped"].append({
+                "file": pdf.name,
+                "reason": f"删除失败：{e}",
+            })
+        else:
+            result["removed"].append(pdf.name)
+    return result

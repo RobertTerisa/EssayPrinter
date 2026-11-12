@@ -142,6 +142,12 @@ python -m ep.cli workspace --workspace-config ep.workspace.json --name <name>
 
 # 构建（workspace 模式）
 python -m ep.cli build --workspace-config ep.workspace.json --name <name> --source-md <article_dir>/source.norm.md
+
+# 清理可证明属于 EssayPrinter 的 stale PDF（默认 dry-run）
+python -m ep.cli clean --workspace-config ep.workspace.json --name <name>
+
+# 确认后实际删除
+python -m ep.cli clean --workspace-config ep.workspace.json --name <name> --apply
 ```
 
 - `--from-ast` 在 workspace 模式下可以省略，默认使用 `article_dir/doc.json`。
@@ -155,6 +161,7 @@ python -m ep.cli build --workspace-config ep.workspace.json --name <name> --sour
 
 - `output_dir/<name>/` 是用户目录。工具只写自己的 `<title>-<artifact_id>.pdf` 和同名 `.manifest.json`，以及发布过程中的临时 `.part` 文件。
 - 成功构建后只清理同一 `doc_key` 的旧版本；失败构建只把同一 `doc_key` 且 manifest 明确的旧 PDF 标记为 `.stale.pdf`。
+- `clean` 用于清理已失去 manifest 的孤儿 `.stale.pdf`：只处理文件名符合 `<title>-<12hex>.stale.pdf`、PDF 元数据 artifact_id 与文件名一致、内容 hash 一致的文件；默认 dry-run，`--apply` 才删除。
 - 没有 manifest 的 PDF、参考 PDF、图片、用户自己的文件等，工具不会改名或删除。
 - manifest 中包含本机绝对路径（`config_path` / `source_dir` / `output_dir` / `release_dir`），对外分享交付物前请注意脱敏。
 
