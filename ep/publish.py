@@ -24,6 +24,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .fontenv import font_args
+
 ARTIFACT_KEY = "/EssayPrinterArtifactId"
 AST_HASH_KEY = "/EssayPrinterAstHash"
 TOKENS_HASH_KEY = "/EssayPrinterTokensHash"
@@ -145,7 +147,7 @@ def font_fingerprint(tokens: dict, typst_bin: str = "typst") -> str:
     h = hashlib.sha256("\n".join(names).encode("utf-8"))
     if shutil.which(typst_bin):
         try:
-            out = subprocess.run([typst_bin, "fonts", "--variants"],
+            out = subprocess.run([typst_bin, "fonts", "--variants", *font_args()],
                                  capture_output=True, text=True,
                                  encoding="utf-8", errors="replace", timeout=15)
             for line in (out.stdout or "").splitlines():

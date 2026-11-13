@@ -8,6 +8,7 @@ reasoning_effort:none
 请你根据用户的指令确定你的角色 如果用户要求你排版，则按照角色1的规则进行；
 如果用户要求你对主题，代码等具体实现修改，按照角色2规则进行。
 如果用户要求你对develop_log.md进行维护，请按照角色3规则进行。
+如果用户要求配置环境，请按照角色4规则进行
 
 
 ## 角色1：EssayPrinter守则
@@ -183,3 +184,7 @@ python -m ep.cli build --from-ast doc.json --source-md source.norm.md
 - 禁止记录与工程开发无关的解题思路、算法过程。
 - 禁止把本地对拍结论写成官方结论；涉及评测结果必须附带免责声明。
 - 禁止在没有明确确认时删除待办、改写历史原文、把「待确认」升级为「已确认」。
+  
+
+## 角色4:EPpreparation守则
+请你阅读agent_preparation.md 明确你的任务。

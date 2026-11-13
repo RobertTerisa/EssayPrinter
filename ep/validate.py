@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 from . import ast as astmod
+from .fontenv import font_args
 from .report import Issue, Report
 
 
@@ -198,7 +199,8 @@ def check_compile(typ_path: Path, out_pdf: Path, raster_dir: Path,
         shutil.rmtree(raster_dir)
     raster_dir.mkdir(parents=True, exist_ok=True)
 
-    proc = _run(["typst", "compile", typ_path, out_pdf], cwd=typ_path.parent)
+    proc = _run(["typst", "compile", typ_path, out_pdf, *font_args()],
+                cwd=typ_path.parent)
     if proc.returncode != 0:
         issues.append(Issue("COMPILE_FAILED", "error",
                             (proc.stderr or "").strip()[:2000],
@@ -214,7 +216,8 @@ def check_compile(typ_path: Path, out_pdf: Path, raster_dir: Path,
 
     # 始终栅格化到 work/raster；--preview 只是“保留一份给人看”
     raster_proc = _run(["typst", "compile", typ_path, raster_dir / "page-{p}.png",
-                        "--format", "png", "--ppi", str(ppi)], cwd=typ_path.parent)
+                        "--format", "png", "--ppi", str(ppi), *font_args()],
+                        cwd=typ_path.parent)
     if raster_proc.returncode != 0:
         issues.append(Issue("RASTER_FAILED", "error",
                             (raster_proc.stderr or "").strip()[:1000],
@@ -487,10 +490,11 @@ def check_cover_fit(typ_path: Path, tol_pt: float = 1.0) -> list[Issue]:
     # 0.15.1 起推荐 eval；query 已标记 deprecated，作兜底。
     proc = _run(["typst", "eval",
                  f"query({COVER_FIT_LABEL}).first().value",
-                 "--in", typ_path.name], cwd=typ_path.parent)
+                 "--in", typ_path.name, *font_args()], cwd=typ_path.parent)
     if proc.returncode != 0:
         proc = _run(["typst", "query", typ_path.name, COVER_FIT_LABEL,
-                     "--field", "value", "--one"], cwd=typ_path.parent)
+                     "--field", "value", "--one", *font_args()],
+                     cwd=typ_path.parent)
     if proc.returncode != 0:
         return [Issue("COVER_FIT_UNMEASURED", "warn",
                       "无法读取封面高度度量，封面单页守卫本次跳过",
