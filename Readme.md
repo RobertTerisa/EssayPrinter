@@ -12,7 +12,7 @@
 ![排版后](./docs/images/after.png)
 
 初次使用请在你的编程平台中打开项目文件夹作为工作区，并提出配置环境的请求。
-之后使用时请在 你的编程平台(如Deepseek Harness) 中打开该项目文件夹作为工作区，将含有文章的 `.html` / `.md` / `.pdf`  引用并要求 LLM 进行排版即可；agent 的具体工作流程由工作区内的 `AGENTS.md` 约束。
+之后使用时请在 你的编程平台(如Deepseek Harness) 中打开该项目文件夹作为工作区，之后将你的文章放入ep.workspace.json里的<source_dir\>\\<name\>目录中，再向LLM提出请求排版<name\>这篇文章。
 
 
 
