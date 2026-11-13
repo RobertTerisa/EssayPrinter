@@ -4,7 +4,15 @@
 
 本项目是一款可以帮助用户将自己的电子版文章轻松转变成易于打印、易于阅读、易于批注的纸质文档的 agent。
 
-使用时请在 DeepSeek Harness 中打开该项目文件夹作为工作区，将含有文章的 `.html` / `.md` / `.pdf` / `.docx` 引用并要求 LLM 进行排版即可；agent 的具体工作流程由工作区内的 `AGENTS.md` 约束。
+排版前
+
+![排版前](./docs/images/before.png)
+
+排版后
+![排版后](./docs/images/after.png)
+
+初次使用请在你的编程平台中打开项目文件夹作为工作区，并提出配置环境的请求。
+之后使用时请在 你的编程平台(如Deepseek Harness) 中打开该项目文件夹作为工作区，将含有文章的 `.html` / `.md` / `.pdf`  引用并要求 LLM 进行排版即可；agent 的具体工作流程由工作区内的 `AGENTS.md` 约束。
 
 
 
@@ -14,6 +22,8 @@
 
 
 > 运行环境：需要 Typst **0.15.1 或更高版本**；`number-type` / `number-width` 依赖该版本。低于最低版本时构建前返回 `ENV_TYPST_TOO_OLD`（exit 3）。
+
+> 经测试，支持markdown中的基本数学公式(包含四则运算，阶乘，微分，积分等)，过于复杂的数学公式不保证渲染效果！具体参见docs\LaTex_test.md 
 
 > **<font color="red">本项目仅限于个人用户学习交流使用，请勿用于商业出版、盗版等行为。任何由用户引起的版权纠纷由用户自行承担，本人概不负责！</font>**
 
@@ -29,7 +39,7 @@
   │  python -m ep.cli build --from-ast doc.json -o out.pdf --theme article-annotated
   ▼
 [1] 归一化 normalize —— 确定性 · 静态工具（基于 all2md）
-    html / md / pdf / docx  ->  规范 Markdown
+    html / md / pdf   ->  规范 Markdown
     只做格式转换，不做任何排版判断；PDF 仅支持纯文本型
   ▼
 [2] 语义化 semanticize —— LLM · 全流程唯一需要模型的环节
@@ -84,7 +94,6 @@
 |------|----------|------|
 | `.md` | 一等公民 | 直接进入 [2] |
 | `.html` | 支持 | all2md 归一化后进入 [2] |
-| `.docx` | 支持 | all2md 归一化后进入 [2] |
 | `.pdf`（**纯文本型**） | 兜底 | 仅支持文字层完整、单栏、无扫描件、无复杂公式的 PDF；双栏 / 扫描件 / 图片内文字不在支持范围 |
 
 

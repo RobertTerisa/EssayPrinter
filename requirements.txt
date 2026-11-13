@@ -1,0 +1,40 @@
+# EssayPrinter - Python dependencies
+# ---------------------------------------------------------------
+# Version pins reflect the reference environment on which
+# `python -m ep.cli build` was verified:
+#   Python 3.13.13 (Windows x86_64)
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# Non-Python requirements (NOT installable via pip):
+#   * Typst CLI >= 0.15.1  -- must be on PATH.
+#     Verified with: typst 0.15.1
+#     `number-type` / `number-width` (themes) require this version;
+#     older versions fail the build with ENV_TYPST_TOO_OLD (exit 3).
+#   * Fonts used by themes: Source Han Serif SC, Noto Sans SC,
+#     Georgia, Segoe UI, Consolas.
+#     Missing fonts fail the build with ENV_FONT_MISSING (exit 3)
+#     or FONT_NOT_EMBEDDED.
+# ---------------------------------------------------------------
+
+# PDF reading / writing: artifact_id stamping, verify, page count,
+# font-embedding check, text stats  (ep/publish.py, ep/validate.py,
+# ep/normalize.py)
+pypdf==6.16.2
+
+# Raster analysis of compiled pages: margin overflow, column overlap,
+# empty page, image DPI checks  (ep/validate.py)
+Pillow==13.0.0
+
+# Pixel-array math for the raster checks above  (ep/validate.py)
+numpy==2.5.4
+
+# JSON Schema validation of doc.json against schema/ast.schema.json
+# (Draft 2020-12)  (ep/ast.py)
+jsonschema==4.26.0
+
+# Normalization of .html / .htm / .docx / .pdf inputs to Markdown
+# (ep/normalize.py). Extras are required: html -> beautifulsoup4 etc.,
+# pdf -> pymupdf, docx -> python-docx / pylatexenc.
+all2md[html,pdf,docx]==1.18.1

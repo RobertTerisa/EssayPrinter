@@ -1,0 +1,18 @@
+# 字体文件一律按二进制处理：禁止行尾转换（core.autocrlf 会把它改坏）、
+# 禁止文本 diff。仓库内 fonts/ 随仓库分发，损坏即无法编译。
+*.otf   binary
+*.ttf   binary
+*.ttc   binary
+*.otc   binary
+*.woff  binary
+*.woff2 binary
+
+# 其它二进制资产
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.zip binary
+
+# 本文件自身固定用 LF，避免被 eol 转换后属性解析异常
+.gitattributes text eol=lf
