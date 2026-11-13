@@ -1,7 +1,3 @@
----
-model:deepseek-v4-flash-vision-exp
-reasoning_effort:none
----
 # AGENTS.md —— EssayPrinter 工作区
 
 ## 0.角色确认
