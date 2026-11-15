@@ -24,6 +24,8 @@
 5. 最终确认：`python -m ep.cli build --from-ast examples/sample.ast.json --source-md examples/sample.md`
    退出码 0 或 2 = 环境就绪；3 = 环境缺失（按上面步骤补）；1 = AST/内容问题（不属环境）。
 
+6. 复制template.ep.workspace.json并更名为ep.workspace.json。
+
 ### 失败处理
 无 winget / 无网络 / 需要管理员权限 → 报告用户，停止，不要重试。
 同一失败最多重试 1 次。
